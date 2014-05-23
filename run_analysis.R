@@ -1,39 +1,48 @@
 run_analysis <- function() {
-  # Loading the information about labels, headers and features.
-  # -----------------------------------
-  labels <- read.table("UCI HAR Dataset/activity_labels.txt")    
-  names(labels) <- c("ActivityID", "ActivityName")
-  featureIndexes = c(1:6, 41:46, 81:86, 121:126, 161:166, 201, 202, 214, 215, 227, 228, 240, 241, 253, 254, 266:271, 294:296, 345:350, 373:375, 424:429, 452:454, 503, 504, 513, 516, 517, 526, 529, 530, 529, 542, 543, 552)
+  # The required packages are loaded
+  require(reshape2)
   
-  # Loading the data from the train set.
-  # -----------------------------------
-  xTrain <- read.table("UCI HAR Dataset/train/X_train.txt")[, featureIndexes]  
-  sTrain <- read.table("UCI HAR Dataset/train/subject_train.txt")
-  names(sTrain) <- c("SubjectID")
-  yTrain <- read.table("UCI HAR Dataset/train/y_train.txt")  
-  names(yTrain) <- c("ActivityID")
-  # The columns are put together.
-  train <- cbind(sTrain, xTrain, yTrain)
-  # Creating the labeled activities.
-  train <- merge(train, labels, by.x = "ActivityID", by.y = "ActivityID")
+  # The training data is loaded
+  subject_train = read.table("UCI HAR Dataset/train/subject_train.txt")
+  x_train = read.table("UCI HAR Dataset/train/X_train.txt")
+  y_train = read.table("UCI HAR Dataset/train/y_train.txt")
+    
+  # The test data is loaded
+  subject_test = read.table("UCI HAR Dataset/test/subject_test.txt")
+  x_test = read.table("UCI HAR Dataset/test/X_test.txt")
+  y_test = read.table("UCI HAR Dataset/test/y_test.txt")  
   
-  # Loading the data from the test set.
-  # -----------------------------------
-  xTest <- read.table("UCI HAR Dataset/test/X_test.txt")[, featureIndexes]
-  sTest <- read.table("UCI HAR Dataset/test/subject_test.txt")
-  names(sTest) <- c("SubjectID")
-  yTest <- read.table("UCI HAR Dataset/test/y_test.txt")
-  names(yTest) <- c("ActivityID")
-  # The columns are put together.
-  test <- cbind(sTest, xTest, yTest)
-  # Creating the labeled activities.
-  test <- merge(test, labels, by.x = "ActivityID", by.y = "ActivityID")
+  # The training and test data are merged together
+  train_data = cbind(subject_train, y_train, x_train)
+  test_data = cbind(subject_test, y_test, x_test )
+  complete_data = rbind(test_data, train_data)
   
-  # Both sets are put together to create a unique data set.
-  data <- rbind(train, test)
+  # The features file is loaded and used to construct the names of the columns 
+  features = read.table("UCI HAR Dataset/features.txt")
+  columntitles = c("Subject", "Activity", as.character(features[,2]))
+  colnames(complete_data) = columntitles
   
-  #x = ddply(data, .(SubjectID, ActivityName), summarize, meanV1 = mean(V1), stdV1 = sd(V1))
+  # The indexes of all the features with 'std' and 'mean' are extracted
+  stdMeasurementIndex = grep(("-std\\(\\)"), features[, 2]) +2
+  meanMeasurementIndex = grep(("-mean\\(\\)"), features[, 2]) +2
   
-  # The data set is returned.
-  return(data)  
-}
+  # The actual data from the selected columns is retrieved
+  stdDevData = complete_data[,stdMeasurementIndex]
+  meanData = complete_data[,meanMeasurementIndex]
+  
+  # The activity levels is extracted from file
+  activity_names = read.table("UCI HAR Dataset/activity_labels.txt")
+  
+  # A new data frame with activity name for each row is created
+  activity_name_col = data.frame(factor(complete_data$Activity, levels=activity_names[,1], labels=activity_names[,2]))
+  colnames(activity_name_col) = "ActivityName"
+  
+  # Merge std, mean and activity name data, producing a std and mean measurements only data set
+  extracted_data = cbind(complete_data[,1:2], activity_name_col, meanData, stdDevData)
+  
+  # The data frame is restructured
+  melted_data = melt(extracted_data,id = c("Subject", "Activity", "ActivityName"))  
+  tidy_data = dcast(melted_data, formula = Subject + Activity + ActivityName ~ variable, mean)
+  
+  # The tidy data is written to a file
+  write.table(tidy_data,"tidyData.txt", row.names = FALSE)}
